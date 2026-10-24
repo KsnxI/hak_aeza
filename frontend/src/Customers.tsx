@@ -49,6 +49,12 @@ export function Customers() {
     setLevel(value)
     setPage(1)
   }
+    function resetFilters() {
+    setSearch('')
+    setDebounced('')
+    setLevel('all')
+    setPage(1)
+  }
 
   function toggleSort(field: SortField) {
     if (field === sort) {
@@ -158,7 +164,14 @@ export function Customers() {
         {isError && (
           <p className="p-6 text-accent">Не удалось загрузить клиентов. Попробуйте обновить страницу.</p>
         )}
-        {data && data.items.length === 0 && <p className="p-6 text-muted">Клиенты не найдены</p>}
+        {data && data.items.length === 0 && (
+  <div className="p-6">
+    <p className="text-muted">Клиенты не найдены. Попробуйте изменить поиск или фильтр.</p>
+    <button onClick={resetFilters} className="mt-2 text-accent hover:underline">
+      Сбросить фильтры
+    </button>
+  </div>
+)}
       </div>
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
