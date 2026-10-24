@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     app_name: str = "Churn Risk Analyzer"
     app_env: str = "development"
 
+    session_ttl_hours: int = 8
+
     database_url: str
 
     cors_origins: list[str] = [
