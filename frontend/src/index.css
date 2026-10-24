@@ -1,1 +1,37 @@
+@import "@fontsource-variable/inter";
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter Variable", system-ui, sans-serif;
+
+  --color-bg: #181717;
+  --color-panel: #303030;
+  --color-accent: #FF5E00;
+  --color-live: #52FF1E;
+  --color-muted: #9a9a9a;
+  --color-line: #444444;
+
+  --text-xs: 1rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 1rem;
+  --text-sm--line-height: 1.5;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5;
+  --text-title: 1.5rem;
+  --text-title--line-height: 2rem;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background: var(--color-bg);
+    color: #ffffff;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+  }
+}
