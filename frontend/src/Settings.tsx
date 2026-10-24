@@ -5,6 +5,7 @@ import { formatMoney } from './format'
 import { PageHeader } from './Layout'
 import { RISK } from './risk'
 import type { ModelSettings, RiskLevel, SettingsPatch } from './types'
+import { SnapshotUpload } from './SnapshotUpload'
 
 const LEVELS: RiskLevel[] = ['high', 'medium', 'low', 'none']
 
@@ -153,6 +154,7 @@ export function Settings() {
                 </div>
               </div>
             </section>
+            <SnapshotUpload />
           </div>
 
           <aside className="h-fit rounded-lg bg-bg p-6">

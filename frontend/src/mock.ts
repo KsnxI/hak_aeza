@@ -85,8 +85,8 @@ function rng(seed: number) {
   }
 }
 
-function generate(): Raw[] {
-  const rnd = rng(42)
+function generate(seed = 42): Raw[] {
+  const rnd = rng(seed)
   const pick = <T,>(arr: T[]): T => arr[Math.floor(rnd() * arr.length)]
   const names = ['vps-web', 'game-server', 'db-node', 'cdn-edge', 'backup', 'mail']
   const domains = ['mail.com', 'corp.ru', 'site.io', 'post.eu']
@@ -130,7 +130,7 @@ function generate(): Raw[] {
   return list
 }
 
-const raws = generate()
+let raws = generate()
 let settings = loadSettings()
 
 const monthly = (s: Service) => s.price * TERM_FACTOR[s.paymentTerm]
@@ -282,6 +282,8 @@ export async function getSummary(): Promise<Summary> {
   const counts: Record<RiskLevel, number> = { high: 0, medium: 0, low: 0, none: 0 }
   let potentialLoss = 0
   let servicesAtRisk = 0
+  let deletedTotal = 0
+
   for (const c of raws) {
     const a = assess(c, settings)
     counts[a.level]++
@@ -289,14 +291,47 @@ export async function getSummary(): Promise<Summary> {
     if (a.level === 'high' || a.level === 'medium') {
       servicesAtRisk += c.services.filter(isBillable).length
     }
+    deletedTotal += c.services.filter((s) => s.status === 'deleted').length
   }
+
+  const deletedPerDay = Math.round(deletedTotal / 14)
   const chart: ChartPoint[] = []
+
   for (let i = -7; i <= 7; i++) {
     const date = new Date(Date.now() + i * DAY).toISOString().slice(0, 10)
-    const v = Math.max(0, servicesAtRisk + Math.round(Math.sin(i * 1.3) * 3) + (i < 0 ? i : Math.round(i * 0.6)))
-    chart.push({ date, ...(i <= 0 && { actual: v }), ...(i >= 0 && { forecast: v }) })
+    const risk = Math.max(
+      0,
+      servicesAtRisk + Math.round(Math.sin(i * 1.3) * 3) + (i < 0 ? i : Math.round(i * 0.6)),
+    )
+    const deleted = Math.max(0, deletedPerDay + Math.round(Math.sin(i * 1.9)))
+    const expected =
+      i <= 0
+        ? deleted
+        : raws.reduce(
+            (n, c) =>
+              n +
+              c.services.filter(
+                (s) => isBillable(s) && !s.autoprolong && s.expiresAt.slice(0, 10) === date,
+              ).length,
+            0,
+          )
+
+    chart.push({
+      date,
+      ...(i <= 0 && { atRisk: risk, deleted }),
+      ...(i >= 0 && { atRiskForecast: risk, expectedChurn: expected }),
+    })
   }
-  return { totalCustomers: raws.length, counts, potentialLoss, servicesAtRisk, chart }
+
+  return {
+    totalCustomers: raws.length,
+    counts,
+    potentialLoss,
+    servicesAtRisk,
+    chart,
+    lossExplanation:
+      'Для каждого клиента берётся месячная стоимость его действующих услуг, умноженная на score (0–100%). Сумма по всем клиентам показывает, сколько выручки можно потерять за месяц, если риск реализуется. Клиенты без оценки не учитываются.',
+  }
 }
 
 export async function getSettings(): Promise<ModelSettings> {
@@ -314,6 +349,18 @@ export async function patchSettings(patch: SettingsPatch): Promise<ModelSettings
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
   mockBus.dispatchEvent(new Event('updated'))
   return structuredClone(settings)
+}
+
+export async function putSnapshot(json: string): Promise<{ ok: boolean }> {
+  await sleep(400)
+  try {
+    JSON.parse(json)
+  } catch {
+    throw new ApiError(400, 'Файл не является корректным JSON')
+  }
+  raws = generate(Math.floor(Math.random() * 1000000))
+  mockBus.dispatchEvent(new Event('updated'))
+  return { ok: true }
 }
 
 export function mockTick() {

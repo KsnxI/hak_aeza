@@ -43,7 +43,8 @@ const real = {
   summary: () => http<Summary>('/analytics/summary'),
   settings: () => http<ModelSettings>('/model/settings'),
   patchSettings: (patch: SettingsPatch) =>
-    http<ModelSettings>('/model/settings', { method: 'PATCH', body: JSON.stringify(patch) }),
+        http<ModelSettings>('/model/settings', { method: 'PATCH', body: JSON.stringify(patch) }),
+        uploadSnapshot: (json: string) => http<unknown>('/source/snapshot', { method: 'PUT', body: json }),
 }
 
 const fake: typeof real = {
@@ -55,6 +56,7 @@ const fake: typeof real = {
   summary: mock.getSummary,
   settings: mock.getSettings,
   patchSettings: mock.patchSettings,
+uploadSnapshot: mock.putSnapshot,
 }
 
 export const api = USE_MOCK ? fake : real

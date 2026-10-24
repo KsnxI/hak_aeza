@@ -67,8 +67,10 @@ export interface CustomersPage {
 
 export interface ChartPoint {
   date: string
-  actual?: number
-  forecast?: number
+  atRisk?: number
+  atRiskForecast?: number
+  deleted?: number
+  expectedChurn?: number
 }
 
 export interface Summary {
@@ -76,6 +78,7 @@ export interface Summary {
   counts: Record<RiskLevel, number>
   potentialLoss: number
   servicesAtRisk: number
+  lossExplanation?: string
   chart: ChartPoint[]
 }
 

@@ -18,6 +18,9 @@ import type { RiskLevel } from './types'
 
 const LEVELS: RiskLevel[] = ['high', 'medium', 'low', 'none']
 
+const DEFAULT_EXPLANATION =
+  'Оценка выручки, которую бизнес может потерять из-за клиентов с риском оттока. Учитывает стоимость их услуг, балансы аккаунтов и уровень риска.'
+
 function shortDate(iso: string): string {
   const [, m, d] = iso.split('-')
   return `${d}.${m}`
@@ -29,7 +32,7 @@ export function Dashboard() {
     queryFn: api.summary,
   })
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = data?.chart.find((p) => p.atRisk !== undefined && p.atRiskForecast !== undefined)?.date
 
   return (
     <>
@@ -62,12 +65,7 @@ export function Dashboard() {
 
           <section className="rounded-lg bg-bg p-6">
             <h2 className="mb-2 font-semibold">Что означает эта сумма</h2>
-            <p className="text-muted">
-              Для каждого клиента берём месячную стоимость всех его действующих услуг и умножаем
-              на его риск (score от 0 до 100%). Сумма по всем клиентам показывает, сколько выручки
-              бизнес может потерять за месяц, если риск реализуется. Чем выше score и дороже
-              услуги, тем больше вклад клиента. Клиенты без оценки в расчёт не входят.
-            </p>
+            <p className="text-muted">{data.lossExplanation ?? DEFAULT_EXPLANATION}</p>
           </section>
 
           <section>
@@ -97,35 +95,63 @@ export function Dashboard() {
           <section>
             <h2 className="mb-1 text-title font-semibold">Динамика оттока</h2>
             <p className="mb-4 text-muted">
-              Количество услуг под риском. Сплошная линия показывает факт, пунктир показывает
-              прогноз.
+              Белые линии показывают услуги под риском (левая шкала). Оранжевые показывают удалённые
+              услуги и ожидаемые непродления в день (правая шкала). Сплошная линия это факт,
+              пунктир это прогноз.
             </p>
 
-            <div className="h-80 rounded-lg bg-bg p-4">
+            <div className="h-96 rounded-lg bg-bg p-4">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data.chart} margin={{ top: 10, right: 20, bottom: 0, left: 0 }}>
+                <LineChart data={data.chart} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                   <CartesianGrid stroke="#444444" strokeDasharray="3 3" />
                   <XAxis dataKey="date" tickFormatter={shortDate} stroke="#9a9a9a" />
-                  <YAxis stroke="#9a9a9a" allowDecimals={false} />
+                  <YAxis yAxisId="left" stroke="#9a9a9a" allowDecimals={false} />
+                  <YAxis yAxisId="right" orientation="right" stroke="#9a9a9a" allowDecimals={false} />
                   <Tooltip
                     labelFormatter={(label) => shortDate(String(label))}
                     contentStyle={{ background: '#303030', border: '1px solid #444444', color: '#ffffff' }}
                   />
                   <Legend />
-                  <ReferenceLine x={today} stroke="#9a9a9a" label={{ value: 'сегодня', fill: '#9a9a9a' }} />
+                  {today && (
+                    <ReferenceLine
+                      yAxisId="left"
+                      x={today}
+                      stroke="#9a9a9a"
+                      label={{ value: 'сегодня', fill: '#9a9a9a' }}
+                    />
+                  )}
                   <Line
-                    type="monotone"
-                    dataKey="actual"
-                    name="Факт"
+                    yAxisId="left"
+                    dataKey="atRisk"
+                    name="Под риском (факт)"
                     stroke="#ffffff"
                     strokeWidth={2}
                     dot={false}
                     connectNulls
                   />
                   <Line
-                    type="monotone"
-                    dataKey="forecast"
-                    name="Прогноз"
+                    yAxisId="left"
+                    dataKey="atRiskForecast"
+                    name="Под риском (прогноз)"
+                    stroke="#ffffff"
+                    strokeWidth={2}
+                    strokeDasharray="6 4"
+                    dot={false}
+                    connectNulls
+                  />
+                  <Line
+                    yAxisId="right"
+                    dataKey="deleted"
+                    name="Удалено услуг (факт)"
+                    stroke="#FF5E00"
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls
+                  />
+                  <Line
+                    yAxisId="right"
+                    dataKey="expectedChurn"
+                    name="Ожидаемые непродления (прогноз)"
                     stroke="#FF5E00"
                     strokeWidth={2}
                     strokeDasharray="6 4"
