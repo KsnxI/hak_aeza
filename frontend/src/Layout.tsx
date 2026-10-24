@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './api'
 import { Logo } from './Logo'
+import { useLive } from './useLive'
 
 const NAV = [
   { to: '/customers', label: 'Клиенты' },
@@ -41,6 +42,7 @@ export function PageHeader({ title }: { title: string }) {
 }
 
 export function Layout() {
+  useLive()
   return (
     <div className="flex min-h-full gap-6 bg-bg p-6">
       <aside className="w-64 shrink-0 p-[30px]">

@@ -8,6 +8,7 @@ import { Pagination } from './Pagination'
 import { RiskBadge } from './RiskBadge'
 import { SummaryCards } from './SummaryCards'
 import type { RiskLevel, SortField, SortOrder } from './types'
+import { LiveIndicator } from './LiveIndicator'
 
 const PAGE_SIZE = 20
 
@@ -89,10 +90,7 @@ export function Customers() {
           <option value="none">Нет оценки</option>
         </select>
 
-        <span className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded-full bg-live" />
-          Обновлено сейчас
-        </span>
+        <LiveIndicator />
       </div>
 
       <div className="mt-6 overflow-x-auto">
