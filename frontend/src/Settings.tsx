@@ -95,7 +95,7 @@ export function Settings() {
                       <div className="mb-2 flex items-center justify-between">
                         <span>{data.labels[name] ?? name}</span>
                         <span className="text-muted">
-                          {w.toFixed(2)} · доля {share}%
+                          {w} · доля {share}%
                         </span>
                       </div>
                       <input
@@ -144,9 +144,9 @@ export function Settings() {
                   </div>
                   <input
                     type="range"
-                    min={1}
-                    max={99}
-                    step={1}
+                    min={0}
+                    max={100}
+                    step={5}
                     value={thresholds.medium}
                     onChange={(e) => changeThreshold('medium', Number(e.target.value))}
                     className="w-full accent-accent"

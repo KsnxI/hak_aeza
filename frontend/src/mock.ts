@@ -20,18 +20,18 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 export const mockBus = new EventTarget()
 
 const FEATURES: Record<string, { label: string; weight: number }> = {
-  autoprolong_off: { label: 'Автопродление выключено', weight: 0.35 },
-  low_balance: { label: 'Не хватает средств', weight: 0.4 },
-  prolong_wait: { label: 'Ожидает оплаты', weight: 0.25 },
+  prolong_wait: { label: 'Ожидает оплаты', weight: 45 },
+  insufficient_balance: { label: 'Не хватает средств', weight: 35 },
+  autoprolong_disabled: { label: 'Автопродление выключено', weight: 20 },
 }
 
 const DEFAULT_SETTINGS: ModelSettings = {
   weights: Object.fromEntries(Object.entries(FEATURES).map(([k, v]) => [k, v.weight])),
   labels: Object.fromEntries(Object.entries(FEATURES).map(([k, v]) => [k, v.label])),
-  thresholds: { high: 50, medium: 25 },
+  thresholds: { high: 60, medium: 30 },
 }
 
-const SETTINGS_KEY = 'mock_settings'
+const SETTINGS_KEY = 'mock_settings_v2'
 const AUTH_KEY = 'mock_auth'
 
 function loadSettings(): ModelSettings {
@@ -146,13 +146,13 @@ function evaluate(c: Raw): Record<string, { value: number; reason: string }> {
   const cantPay = waiting.length > 0 && c.balance < Math.min(...waiting.map((s) => s.price))
 
   return {
-    autoprolong_off: {
+    autoprolong_disabled: {
       value: apOff.length ? 1 : 0,
       reason: apOff.length
         ? `Автопродление выключено, срок истекает скоро (услуг: ${apOff.length})`
         : 'Автопродление не создаёт риска',
     },
-    low_balance: {
+    insufficient_balance: {
       value: Math.round(lack * 100) / 100,
       reason:
         lack >= 0.5
@@ -343,7 +343,7 @@ export async function patchSettings(patch: SettingsPatch): Promise<ModelSettings
   await sleep(100)
   const weights = { ...settings.weights }
   for (const [k, v] of Object.entries(patch.weights ?? {})) {
-    if (k in weights) weights[k] = Math.min(1, Math.max(0, v))
+    if (k in weights) weights[k] = Math.min(100, Math.max(0, v))
   }
   settings = { ...settings, weights, thresholds: { ...settings.thresholds, ...patch.thresholds } }
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
