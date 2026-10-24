@@ -1,7 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 from typing import Annotated
-
+from backend.routers.settings import router as settings_router
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
@@ -47,6 +47,8 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(auth_router)
+app.include_router(settings_router)
 
 
 @app.get("/health", tags=["Health"])
