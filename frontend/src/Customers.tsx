@@ -1,14 +1,14 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api } from './api'
 import { formatMoney } from './format'
 import { PageHeader } from './Layout'
+import { LiveIndicator } from './LiveIndicator'
 import { Pagination } from './Pagination'
 import { RiskBadge } from './RiskBadge'
 import { SummaryCards } from './SummaryCards'
 import type { RiskLevel, SortField, SortOrder } from './types'
-import { LiveIndicator } from './LiveIndicator'
 
 const PAGE_SIZE = 20
 
@@ -28,8 +28,9 @@ export function Customers() {
   const [sort, setSort] = useState<SortField>('score')
   const [order, setOrder] = useState<SortOrder>('desc')
   const [page, setPage] = useState(1)
+  const timer = useRef(0)
 
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError } = useQuery({
     queryKey: ['customers', { search: debounced, level, sort, order, page }],
     queryFn: () => api.customers({ search: debounced, level, sort, order, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
@@ -37,8 +38,8 @@ export function Customers() {
 
   function changeSearch(value: string) {
     setSearch(value)
-    window.clearTimeout(timer)
-    timer = window.setTimeout(() => {
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => {
       setDebounced(value)
       setPage(1)
     }, 300)
@@ -154,6 +155,9 @@ export function Customers() {
         </table>
 
         {isPending && <p className="p-6 text-muted">Загрузка…</p>}
+        {isError && (
+          <p className="p-6 text-accent">Не удалось загрузить клиентов. Попробуйте обновить страницу.</p>
+        )}
         {data && data.items.length === 0 && <p className="p-6 text-muted">Клиенты не найдены</p>}
       </div>
 
@@ -166,5 +170,3 @@ export function Customers() {
     </>
   )
 }
-
-let timer = 0
