@@ -11,14 +11,10 @@ from backend.dependencies import (
     AuthContext,
     get_auth_context,
     get_current_user,
+    verify_request_origin,
 )
 from backend.models import AuthSession, User
-from backend.schemas import (
-    LoginRequest,
-    MessageResponse,
-    TokenResponse,
-    UserResponse,
-)
+from backend.schemas import LoginRequest, LoginResponse
 from backend.security import (
     DUMMY_PASSWORD_HASH,
     generate_session_token,
@@ -33,16 +29,18 @@ router = APIRouter(
 )
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=LoginResponse,
+    dependencies=[Depends(verify_request_origin)],
+)
 def login(
     payload: LoginRequest,
     response: Response,
     db: Annotated[Session, Depends(get_db)],
-) -> TokenResponse:
+) -> LoginResponse:
     user = db.scalar(
-        select(User).where(
-            User.username == payload.username,
-        )
+        select(User).where(User.username == payload.login)
     )
 
     stored_hash = (
@@ -59,55 +57,80 @@ def login(
     if user is None or not password_valid or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверный логин или пароль",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Invalid login or password",
         )
 
     settings = get_settings()
 
+    ttl_seconds = settings.session_ttl_hours * 3600
+
     expires_at = datetime.now(timezone.utc) + timedelta(
-        hours=settings.session_ttl_hours,
+        seconds=ttl_seconds
     )
 
     token = generate_session_token()
 
-    auth_session = AuthSession(
-        user_id=user.id,
-        token_hash=hash_session_token(token),
-        expires_at=expires_at,
+    db.add(
+        AuthSession(
+            user_id=user.id,
+            token_hash=hash_session_token(token),
+            expires_at=expires_at,
+        )
     )
-
-    db.add(auth_session)
     db.commit()
+
+    response.set_cookie(
+        key=settings.session_cookie_name,
+        value=token,
+        max_age=ttl_seconds,
+        expires=expires_at,
+        path="/",
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite="lax",
+    )
 
     response.headers["Cache-Control"] = "no-store"
 
-    return TokenResponse(
-        access_token=token,
-        expires_at=expires_at,
-    )
+    return LoginResponse(login=user.username)
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=LoginResponse)
 def me(
     response: Response,
     user: Annotated[User, Depends(get_current_user)],
-) -> User:
+) -> LoginResponse:
     response.headers["Cache-Control"] = "no-store"
-    return user
+
+    return LoginResponse(login=user.username)
 
 
-@router.post("/logout", response_model=MessageResponse)
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 def logout(
-    response: Response,
     auth: Annotated[AuthContext, Depends(get_auth_context)],
     db: Annotated[Session, Depends(get_db)],
-) -> MessageResponse:
+    _: Annotated[None, Depends(verify_request_origin)],
+) -> Response:
     db.delete(auth.session)
     db.commit()
 
+    settings = get_settings()
+
+    response = Response(
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+
+    response.delete_cookie(
+        key=settings.session_cookie_name,
+        path="/",
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite="lax",
+    )
+
     response.headers["Cache-Control"] = "no-store"
 
-    return MessageResponse(
-        detail="Выход выполнен",
-    )
+    return response

@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-
+from backend.dependencies import get_current_user
 from backend.config import get_settings
 from backend.db import engine, get_db
 from backend.routers.auth import router as auth_router
@@ -38,13 +38,24 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
-)
+if settings.app_env == "development":
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=[
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "OPTIONS",
+        ],
+        allow_headers=[
+            "Content-Type",
+            "Authorization",
+        ],
+    )
 
 app.include_router(auth_router)
 app.include_router(auth_router)
@@ -58,7 +69,11 @@ def health() -> dict[str, str]:
     }
 
 
-@app.get("/health/db", tags=["Health"])
+@app.get(
+    "/health/db",
+    tags=["Health"],
+    dependencies=[Depends(get_current_user)],
+)
 def database_health(
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, str]:

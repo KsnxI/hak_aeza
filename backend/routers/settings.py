@@ -1,17 +1,25 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.db import get_db
-from backend.dependencies import get_current_user
+from backend.dependencies import (
+    get_current_user,
+    verify_request_origin,
+)
+from backend.feature_catalog import (
+    FEATURES,
+    get_effective_weights,
+    get_feature_labels,
+)
 from backend.models import ModelSettings
 from backend.schemas import (
     ModelSettingsPatch,
     ModelSettingsResponse,
-    ModelSettingsValues,
+    Thresholds,
 )
 
 
@@ -22,13 +30,24 @@ router = APIRouter(
 )
 
 
+def serialize_settings(
+    settings: ModelSettings,
+) -> ModelSettingsResponse:
+    return ModelSettingsResponse(
+        weights=get_effective_weights(settings.weights),
+        labels=get_feature_labels(),
+        thresholds=Thresholds(
+            high=settings.high_threshold,
+            medium=settings.medium_threshold,
+        ),
+        horizonDays=settings.horizon_days,
+    )
+
+
 def settings_unavailable() -> HTTPException:
     return HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail=(
-            "Настройки модели не инициализированы. "
-            "Проверьте миграцию и начальную запись model_settings."
-        ),
+        status_code=503,
+        detail="Model settings are not initialized",
     )
 
 
@@ -39,7 +58,7 @@ def settings_unavailable() -> HTTPException:
 def get_model_settings(
     response: Response,
     db: Annotated[Session, Depends(get_db)],
-) -> ModelSettings:
+) -> ModelSettingsResponse:
     settings = db.get(ModelSettings, 1)
 
     if settings is None:
@@ -47,7 +66,7 @@ def get_model_settings(
 
     response.headers["Cache-Control"] = "no-store"
 
-    return settings
+    return serialize_settings(settings)
 
 
 @router.patch(
@@ -58,9 +77,8 @@ def update_model_settings(
     payload: ModelSettingsPatch,
     response: Response,
     db: Annotated[Session, Depends(get_db)],
-) -> ModelSettings:
-    changes = payload.model_dump(exclude_unset=True)
-
+    _: Annotated[None, Depends(verify_request_origin)],
+) -> ModelSettingsResponse:
     try:
         settings = db.scalar(
             select(ModelSettings)
@@ -71,36 +89,86 @@ def update_model_settings(
         if settings is None:
             raise settings_unavailable()
 
-        current_values = ModelSettingsValues.model_validate(
-            settings
-        ).model_dump()
+        current_weights = get_effective_weights(
+            settings.weights
+        )
 
-        merged_values = {
-            **current_values,
-            **changes,
+        weight_changes = (
+            payload.weights
+            if payload.weights is not None
+            else {}
+        )
+
+        unknown_names = set(weight_changes) - set(FEATURES)
+
+        if unknown_names:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Unknown features: "
+                    + ", ".join(sorted(unknown_names))
+                ),
+            )
+
+        new_weights = {
+            **current_weights,
+            **weight_changes,
         }
 
+        if sum(new_weights.values()) <= 0:
+            raise HTTPException(
+                status_code=422,
+                detail="At least one weight must be greater than zero",
+            )
+
+        threshold_changes = (
+            payload.thresholds.model_dump(exclude_unset=True)
+            if payload.thresholds is not None
+            else {}
+        )
+
         try:
-            validated_values = ModelSettingsValues.model_validate(
-                merged_values
+            new_thresholds = Thresholds.model_validate(
+                {
+                    "high": settings.high_threshold,
+                    "medium": settings.medium_threshold,
+                    **threshold_changes,
+                }
             )
         except ValidationError as exc:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=422,
                 detail=str(exc),
             ) from None
 
-        new_values = validated_values.model_dump()
+        new_horizon = (
+            payload.horizon_days
+            if payload.horizon_days is not None
+            else settings.horizon_days
+        )
 
-        if new_values != current_values:
-            for field_name, value in new_values.items():
-                setattr(settings, field_name, value)
+        changed = (
+            new_weights != current_weights
+            or new_thresholds.high != settings.high_threshold
+            or new_thresholds.medium != settings.medium_threshold
+            or new_horizon != settings.horizon_days
+        )
 
+        if changed:
+            settings.weights = {
+                **settings.weights,
+                **new_weights,
+            }
+
+            settings.high_threshold = new_thresholds.high
+            settings.medium_threshold = new_thresholds.medium
+            settings.horizon_days = new_horizon
             settings.version += 1
-
 
         db.commit()
         db.refresh(settings)
+
+        result = serialize_settings(settings)
 
     except Exception:
         db.rollback()
@@ -108,4 +176,4 @@ def update_model_settings(
 
     response.headers["Cache-Control"] = "no-store"
 
-    return settings
+    return result
