@@ -1,6 +1,5 @@
 import { ApiError } from './types'
 import type {
-  Customer,
   CustomerDetail,
   CustomersPage,
   CustomersQuery,
@@ -33,18 +32,30 @@ function toQuery(q: CustomersQuery): string {
   return s ? `?${s}` : ''
 }
 
+async function me(): Promise<User> {
+  const u = await http<{ username?: string; login?: string }>('/auth/me')
+  return { login: u.username ?? u.login ?? '' }
+}
+
+async function login(name: string, password: string): Promise<User> {
+  await http<unknown>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username: name, password }),
+  })
+  return me()
+}
+
 const real = {
-  login: (login: string, password: string) =>
-    http<User>('/auth/login', { method: 'POST', body: JSON.stringify({ login, password }) }),
-  me: () => http<User>('/auth/me'),
+  login,
+  me,
   logout: () => http<void>('/auth/logout', { method: 'POST' }),
   customers: (q: CustomersQuery = {}) => http<CustomersPage>(`/customers${toQuery(q)}`),
   customer: (id: number) => http<CustomerDetail>(`/customers/${id}`),
   summary: () => http<Summary>('/analytics/summary'),
   settings: () => http<ModelSettings>('/model/settings'),
   patchSettings: (patch: SettingsPatch) =>
-        http<ModelSettings>('/model/settings', { method: 'PATCH', body: JSON.stringify(patch) }),
-        uploadSnapshot: (json: string) => http<unknown>('/source/snapshot', { method: 'PUT', body: json }),
+    http<ModelSettings>('/model/settings', { method: 'PATCH', body: JSON.stringify(patch) }),
+  uploadSnapshot: (json: string) => http<unknown>('/source/snapshot', { method: 'PUT', body: json }),
 }
 
 const fake: typeof real = {
@@ -56,9 +67,8 @@ const fake: typeof real = {
   summary: mock.getSummary,
   settings: mock.getSettings,
   patchSettings: mock.patchSettings,
-uploadSnapshot: mock.putSnapshot,
+  uploadSnapshot: mock.putSnapshot,
 }
 
 export const api = USE_MOCK ? fake : real
-export type { Customer }
 export { ApiError }
