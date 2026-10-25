@@ -11,6 +11,7 @@ from backend.dependencies import get_current_user
 from backend.config import get_settings
 from backend.db import engine, get_db
 from backend.routers.auth import router as auth_router
+from backend.install_analysis import install_analysis
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -60,6 +61,7 @@ if settings.app_env == "development":
 app.include_router(auth_router)
 app.include_router(auth_router)
 app.include_router(settings_router)
+install_analysis(app)
 
 
 @app.get("/health", tags=["Health"])
