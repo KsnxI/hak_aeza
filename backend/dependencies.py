@@ -1,20 +1,25 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Annotated
+from urllib.parse import urlsplit
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import APIKeyCookie
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.config import get_settings
 from backend.db import get_db
 from backend.models import AuthSession, User
 from backend.security import hash_session_token
 
 
-bearer_scheme = HTTPBearer(
+settings = get_settings()
+
+cookie_scheme = APIKeyCookie(
+    name=settings.session_cookie_name,
     auto_error=False,
-    scheme_name="SessionToken",
+    scheme_name="SessionCookie",
 )
 
 
@@ -27,34 +32,40 @@ class AuthContext:
 def unauthorized() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Требуется вход или срок действия сессии истёк",
-        headers={"WWW-Authenticate": "Bearer"},
+        detail="Not authenticated",
     )
 
 
+def verify_request_origin(request: Request) -> None:
+    if request.method in {"GET", "HEAD", "OPTIONS"}:
+        return
+
+    origin = request.headers.get("origin")
+
+    if origin is None:
+        referer = request.headers.get("referer")
+
+        if referer:
+            parts = urlsplit(referer)
+            origin = f"{parts.scheme}://{parts.netloc}"
+
+    if origin not in settings.trusted_origins:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Untrusted request origin",
+        )
+
+
 def get_auth_context(
-    credentials: Annotated[
-        HTTPAuthorizationCredentials | None,
-        Depends(bearer_scheme),
-    ],
+    token: Annotated[str | None, Depends(cookie_scheme)],
     db: Annotated[Session, Depends(get_db)],
 ) -> AuthContext:
-    if credentials is None:
+    if not token or len(token) > 512:
         raise unauthorized()
-
-    if credentials.scheme.lower() != "bearer":
-        raise unauthorized()
-
-    token = credentials.credentials
-
-    if len(token) > 512:
-        raise unauthorized()
-
-    token_hash = hash_session_token(token)
 
     auth_session = db.scalar(
         select(AuthSession).where(
-            AuthSession.token_hash == token_hash,
+            AuthSession.token_hash == hash_session_token(token),
             AuthSession.expires_at > datetime.now(timezone.utc),
         )
     )

@@ -1,5 +1,5 @@
 from datetime import datetime
-
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -93,12 +93,8 @@ class ModelSettings(Base):
             name="ck_model_settings_horizon",
         ),
         CheckConstraint(
-            """
-            weight_prolong_wait BETWEEN 0 AND 100
-            AND weight_insufficient_balance BETWEEN 0 AND 100
-            AND weight_autoprolong_disabled BETWEEN 0 AND 100
-            """,
-            name="ck_model_settings_weights",
+            "jsonb_typeof(weights) = 'object'",
+            name="ck_model_settings_weights_object",
         ),
         CheckConstraint(
             """
@@ -120,28 +116,15 @@ class ModelSettings(Base):
         autoincrement=False,
     )
 
+    weights: Mapped[dict[str, int]] = mapped_column(
+        JSONB,
+        nullable=False,
+    )
+
     horizon_days: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
         server_default=text("7"),
-    )
-
-    weight_prolong_wait: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        server_default=text("45"),
-    )
-
-    weight_insufficient_balance: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        server_default=text("35"),
-    )
-
-    weight_autoprolong_disabled: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        server_default=text("20"),
     )
 
     medium_threshold: Mapped[int] = mapped_column(
