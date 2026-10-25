@@ -59,7 +59,6 @@ if settings.app_env == "development":
     )
 
 app.include_router(auth_router)
-app.include_router(auth_router)
 app.include_router(settings_router)
 install_analysis(app)
 
