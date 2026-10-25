@@ -36,14 +36,14 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/login" element={<Login />} />
           <Route element={<RequireAuth />}>
             <Route element={<Layout />}>
-              <Route index element={<Navigate to="/customers" replace />} />
+              <Route index element={<Navigate to="/login" replace />} />
               <Route path="/customers" element={<Customers />} />
               <Route path="/customers/:id" element={<Customer />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
           </Route>
-          <Route path="*" element={<Navigate to="/customers" replace />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />do
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>
