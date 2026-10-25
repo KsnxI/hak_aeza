@@ -50,5 +50,16 @@ services:
         --port 8000
         --reload
 
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_USE_MOCK: "true"
+    restart: unless-stopped
+
 volumes:
   postgres_data:
